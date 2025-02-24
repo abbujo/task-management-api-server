@@ -2,13 +2,9 @@ import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
 import helmet from "helmet";
-
-// Import Routes
-import authRoutes from "./routes/auth";
-import projectRoutes from "./routes/projects";
-import taskRoutes from "./routes/tasks";
-import userRoutes from "./routes/users";
-import logRoutes from "./routes/logs";
+import connectDB from "./config/db";
+import mongoose from "mongoose";
+import { logToDB } from "./utils/logger";
 
 dotenv.config();
 
@@ -20,21 +16,43 @@ app.use(express.json());
 app.use(cors());
 app.use(helmet());
 
-// Register Routes
-app.use("/auth", authRoutes);
-app.use("/projects", projectRoutes);
-app.use("/tasks", taskRoutes);
-app.use("/users", userRoutes);
-app.use("/logs", logRoutes);
+// Connect to MongoDB
+connectDB();
+
+// Function to get Mongoose connection state
+const getDbStatus = () => {
+  switch (mongoose.connection.readyState) {
+    case 0:
+      return "Disconnected ❌";
+    case 1:
+      return "Connected ✅";
+    case 2:
+      return "Connecting ⏳";
+    case 3:
+      return "Disconnecting 🔄";
+    default:
+      return "Unknown State ❓";
+  }
+};
 
 // Health Check Route
-app.get("/health", (req, res) => {
-  res.status(200).json({ status: "OK" });
+app.get("/health", async (req, res) => {
+  const dbStatus = getDbStatus();
+  const lastError = (mongoose.connection as any)._connectionError || "No recent errors";
+
+  // ✅ Log every health check request
+  await logToDB("info", "Health check requested", { dbStatus });
+
+  res.status(200).json({
+    status: "OK",
+    database: dbStatus,
+    lastError: lastError.message || lastError,
+  });
 });
 
 // Start Server
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
 
 export default app;
